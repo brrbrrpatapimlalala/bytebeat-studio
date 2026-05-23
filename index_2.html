@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bytebeat Studio (Simple)</title>
+    <style>
+        /* Упрощенная цветовая схема: просто черный, белый и один акцент */
+        :root {
+            --bg: #111;
+            --text: #eee;
+            --accent: #007bff;
+            --border: #333;
+            --card-bg: #1a1a1a;
+            --danger: #ff4d4d;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: monospace; /* Классический шрифт */
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Убираем абсолютное позиционирование для простоты, ставим в поток */
+        .top-bar {
+            width: 100%;
+            max-width: 1000px;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        .studio-container {
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            margin: 0;
+            color: var(--accent);
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+        }
+
+        /* Упрощенные карточки: никаких теней и блюра */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            padding: 20px; 
+        }
+
+        input[type="range"] {
+            accent-color: var(--accent);
+        }
+
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            background: #000;
+            border: 1px solid var(--border);
+            color: var(--accent);
+            padding: 10px;
+            font-family: monospace;
+            box-sizing: border-box;
+            margin: 10px 0;
+        }
+
+        button {
+            background: #222;
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 10px;
+            cursor: pointer;
+            font-family: monospace;
+            text-transform: uppercase;
+        }
+
+        button:hover {
+            background: #333;
+            border-color: var(--accent);
+        }
+
+        #playBtn { background: var(--accent); color: #000; border: none; font-weight: bold; }
+        #copyUrlBtn { color: var(--accent); }
+
+        .preset-list {
+            height: 180px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            background: #000;
+        }
+
+        .preset-item {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+        }
+
+        .preset-item:hover {
+            background: #111;
+            color: var(--accent);
+        }
+
+        .preset-author { font-size: 0.8em; opacity: 0.6; }
+
+        canvas {
+            width: 100%;
+            height: 150px;
+            background: #000;
+            border: 1px solid var(--border);
+            margin-top: 15px;
+        }
+
+        /* Модальное окно без блюра */
+        #contactModal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            border: 2px solid var(--accent);
+            padding: 30px;
+            width: 400px;
+        }
+
+        label { font-size: 0.8rem; color: var(--accent); }
+
+        .btn-group { display: flex; gap: 5px; margin-top: 10px; }
+        .btn-group button { flex: 1; }
+
+        @media (max-width: 800px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <div id="update-info" data-utc="2026-05-22T09:30:00Z">UPD: Loading...</div>
+        <button id="bugBtn" style="color: var(--danger); margin-left: auto; margin-right: 20px;">Bug Report</button>
+        <button id="settingsBtn" style="color: var(--accent); margin-right: 20px;">Settings</button>
+        <button id="contactBtn">Submit Track</button>
+    </div>
+
+    <div class="studio-container">
+        <div class="header" style="margin-bottom: 20px;">
+            <h1>Bytebeat Studio</h1>
+            <small>Simple Engine V5.2</small>
+        </div>
+
+        <div class="main-grid">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label>FORMULA</label>
+                    <select id="mode" style="background: #000; color: var(--accent); border: 1px solid var(--border); font-family: monospace; font-size: 10px; padding: 2px;">
+                        <option value="bytebeat">BYTEBEAT (0-255)</option>
+                        <option value="floatbeat">FLOATBEAT (-1.0 to 1.0)</option>
+                    </select>
+                </div>
+                <input type="text" id="formula" value="(t*(t>>8|t>>9)&46&t>>8)^(t&t>>13|t>>6)">
+                
+                <div class="btn-group">
+                    <button id="playBtn">PLAY / STOP</button>
+                    <button id="resetTBtn">RESET T</button>
+                    <button id="copyUrlBtn">COPY URL</button>
+                </div>
+
+                <canvas id="viz"></canvas>
+                
+                <div style="margin-top:10px; font-size: 12px; opacity: 0.5;">
+                    STATUS: <span id="status">IDLE</span> | T: <span id="tval">0</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <label>VOLUME</label>
+                <input type="range" id="volume" min="0" max="1" step="0.01" value="0.3" style="width:100%;">
+                
+                <label>HERTZ (Hz)</label>
+                <input type="number" id="hz" value="8000">
+
+                <label>PRESETS</label>
+                <div class="preset-list" id="presetList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="contactModal">
+        <div class="modal-content">
+            <h3 style="margin-top:0">SUBMIT TRACK</h3>
+            <form action="paste here your formspree link" method="POST">
+                <label>Author</label>
+                <input type="text" name="author" required>
+                <label>Title</label>
+                <input type="text" name="title" required>
+                <label>Formula</label>
+                <input type="text" name="formula" id="submitFormula" required>
+                <label>Hertz</label>
+                <input type="text" name="hertz" required>
+                <label>Mode</label>
+                <select name="mode" id="submitMode" style="width: 100%; background: #000; border: 1px solid var(--border); color: var(--accent); padding: 10px; margin: 10px 0; font-family: monospace;">
+                    <option value="bytebeat">Bytebeat</option>
+                    <option value="floatbeat">Floatbeat</option>
+                </select>
+                
+                <div class="btn-group">
+                    <button type="submit" style="background:var(--accent); color:#000">SEND</button>
+                    <button type="button" id="closeModal">CANCEL</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="settingsModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center;">
+        <div class="modal-content">
+            <h3 style="margin-top:0">INTERFACE SETTINGS</h3>
+            
+            <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                <label>ACCENT COLOR (LINKS, HEADERS)</label>
+                <input type="color" id="colorAccent" value="#007bff" style="width:50px; height:30px; padding:0; cursor:pointer; background:none; border:1px solid var(--border)">
+            </div>
+            
+            <div class="btn-group">
+                <button type="button" id="closeSettings" style="background:var(--accent); color:#000; font-weight:bold;">CLOSE</button>
+            </div>
+        </div>
+    </div>
+    <div id="bugModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center;">
+        <div class="modal-content" style="border-color: var(--danger);">
+            <h3 style="margin-top:0; color: var(--danger);">REPORT A BUG</h3>
+            <form action="paste here your formspree link" method="POST">
+                <input type="hidden" name="_subject" value="Bytebeat Studio - BUG REPORT!">
+                
+                <label style="color: var(--danger);">Your Nickname / Contact</label>
+                <input type="text" name="reporter" placeholder="e.g. Anon#1337" required>
+                
+                <label style="color: var(--danger);">What happened? (Bug Description)</label>
+                <input type="text" name="bug_description" placeholder="Describe the issue..." required>
+                
+                <label style="color: var(--danger);">Formula used when bug occurred (Optional)</label>
+                <input type="text" name="bug_formula" id="bugFormula">
+
+                <div class="btn-group">
+                    <button type="submit" style="background:var(--danger); color:#000; font-weight:bold;">SUBMIT BUG</button>
+                    <button type="button" id="closeBugModal">CANCEL</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+
+        let audioCtx, scriptNode, gainNode;
+        let t = 0;
+        let isPlaying = false;
+        const canvas = document.getElementById('viz');
+        const canvasCtx = canvas.getContext('2d');
+        let currentData = new Float32Array(4096); // Буфер для визуализации
+
+// Функция для загрузки пресетов из внешнего файла
+        async function initPresets() {
+            const list = document.getElementById('presetList');
+            
+            try {
+                // Загружаем файл presets.json
+                const response = await fetch('presets.json');
+                const presets = await response.json();
+
+                presets.forEach(p => {
+                    const div = document.createElement('div');
+                    div.className = 'preset-item';
+                    // Синий цвет ника и названия, как ты просил
+                    div.innerHTML = `<strong style="color:var(--accent)">${p.name}</strong><br><span class="preset-author">by ${p.author}</span>`;
+                    
+                    div.onclick = () => {
+                        // 1. Устанавливаем формулу и герцы
+                        document.getElementById('formula').value = p.formula;
+                        document.getElementById('hz').value = p.hz;
+                        
+                        // 2. Находим наш переключатель режимов
+                        const modeSelect = document.getElementById('mode');
+                        
+                        if (modeSelect) {
+                            // Если в JSON написано "floatbeat" — ставим его. 
+                            // ВО ВСЕХ ОСТАЛЬНЫХ СЛУЧАЯХ (если пусто или написано "bytebeat") — ставим "bytebeat"
+                            if (p.mode === "floatbeat") {
+                                modeSelect.value = "floatbeat";
+                            } else {
+                                modeSelect.value = "bytebeat";
+                            }
+                        }
+                        
+                        t = 0; // Сброс времени для нового трека
+                        console.log(`Loaded: ${p.name} | Mode: ${modeSelect.value}`);
+                    };
+                    list.appendChild(div);
+                });
+                
+                console.log("Presets loaded successfully!");
+            } catch (error) {
+                console.error("Error loading presets:", error);
+                list.innerHTML = "<div style='color:red; padding:10px;'>Error loading presets.json</div>";
+            }
+        }
+
+        function initAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            scriptNode = audioCtx.createScriptProcessor(4096, 1, 2);
+            gainNode = audioCtx.createGain();
+            gainNode.gain.value = document.getElementById('volume').value;
+
+            // Подготавливаем список математических функций один раз
+            const mathProps = Object.getOwnPropertyNames(Math);
+            const mathValues = mathProps.map(prop => Math[prop]);
+
+            scriptNode.onaudioprocess = function(e) {
+                // Получаем указатели на левый и правый каналы отдельно
+                const outLeft = e.outputBuffer.getChannelData(0);
+                const outRight = e.outputBuffer.getChannelData(1);
+                
+                const formula = document.getElementById('formula').value;
+                const mode = document.getElementById('mode').value;
+                
+                let func;
+                try {
+                    func = new Function('t', ...mathProps, `return ${formula}`);
+                } catch(err) {
+                    return; 
+                }
+
+                let userHz = parseInt(document.getElementById('hz').value) || 8000;
+                let ratio = userHz / audioCtx.sampleRate;
+
+                for (let i = 0; i < outLeft.length; i++) {
+                    let tArg = (mode === 'bytebeat') ? Math.floor(t) : t;
+                    let val = func(tArg, ...mathValues);
+                    
+                    let valLeft, valRight;
+
+                    // Проверяем, вернула ли формула стерео-массив [левый, правый]
+                    if (Array.isArray(val)) {
+                        valLeft = val[0] || 0;
+                        valRight = val[1] || 0;
+                    } else {
+                        // Если вернула обычное число — пускаем его в оба уха (моно)
+                        valLeft = val;
+                        valRight = val;
+                    }
+                    
+                    // Обработка звука для левого и правого уха
+                    if (mode === 'bytebeat') {
+                        outLeft[i] = ((valLeft & 255) / 127.5) - 1.0;
+                        outRight[i] = ((valRight & 255) / 127.5) - 1.0;
+                    } else {
+                        outLeft[i] = Math.max(-1, Math.min(1, valLeft));
+                        outRight[i] = Math.max(-1, Math.min(1, valRight));
+                    }
+                    t += ratio; 
+                }
+                
+                // Для красивой визуализации смешиваем левый и правый каналы в один буфер
+                for (let i = 0; i < currentData.length; i++) {
+                    currentData[i] = (outLeft[i] + outRight[i]) / 2;
+                }
+                
+                document.getElementById('tval').innerText = Math.floor(t);
+            };
+
+            scriptNode.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+        }
+
+        function draw(data) {
+            canvasCtx.fillStyle = '#000';
+            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Получаем текущее значение акцентного цвета из CSS
+            const currentAccent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+            canvasCtx.strokeStyle = currentAccent || '#007bff'; 
+            
+            canvasCtx.beginPath();
+            let x = 0;
+            let step = canvas.width / data.length;
+            for(let i=0; i<data.length; i++) {
+                let y = (data[i] * 1 + 1) * canvas.height / 2;
+                i === 0 ? canvasCtx.moveTo(x, y) : canvasCtx.lineTo(x, y);
+                x += step;
+            }
+            canvasCtx.stroke();
+        }
+
+        document.getElementById('playBtn').onclick = function() {
+            if (!isPlaying) {
+                if (!audioCtx) initAudio(); else audioCtx.resume();
+                this.innerText = "STOP";
+                document.getElementById('status').innerText = "RUNNING";
+                isPlaying = true;
+            } else {
+                audioCtx.suspend();
+                this.innerText = "PLAY";
+                document.getElementById('status').innerText = "PAUSED";
+                isPlaying = false;
+            }
+        };
+
+        document.getElementById('resetTBtn').onclick = () => { t = 0; };
+        
+        document.getElementById('volume').oninput = function() {
+            if(gainNode) gainNode.gain.value = this.value;
+        };
+
+        // URL Copy Logic
+        document.getElementById('copyUrlBtn').onclick = function() {
+            const formula = document.getElementById('formula').value;
+            const hz = document.getElementById('hz').value;
+            
+            try {
+                // Используем encodeURIComponent + btoa для безопасной передачи любых символов
+                const encodedFormula = btoa(encodeURIComponent(formula));
+                const mode = document.getElementById('mode').value;
+                const url = new URL(window.location.href);
+                url.searchParams.set('f', encodedFormula);
+                url.searchParams.set('hz', hz);
+                url.searchParams.set('m', mode); // Добавляем параметр режима
+                
+                navigator.clipboard.writeText(url.href).then(() => {
+                    alert("URL Copied! Now you can share it.");
+                });
+            } catch (e) {
+                console.error("Encoding error:", e);
+                alert("Error creating URL. Check your formula.");
+            }
+        };
+
+        // Modal Logic
+        const modal = document.getElementById('contactModal');
+        document.getElementById('contactBtn').onclick = () => {
+            modal.style.display = 'flex';
+            document.getElementById('submitFormula').value = document.getElementById('formula').value;
+            document.getElementById('submitHz').value = document.getElementById('hz').value;
+        };
+        document.getElementById('closeModal').onclick = () => modal.style.display = 'none';
+
+        initPresets();
+        function renderLoop() {
+            if (isPlaying) {
+                draw(currentData);
+            }
+            requestAnimationFrame(renderLoop); // Запрашивает следующий кадр
+        }
+
+    // Запускаем цикл один раз
+    renderLoop();
+    function loadFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const fParam = params.get('f');
+        const hzParam = params.get('hz');
+        const mParam = params.get('m');
+        
+        if (fParam) {
+            try {
+                // Декодируем обратно
+                const decodedFormula = decodeURIComponent(atob(fParam));
+                document.getElementById('formula').value = decodedFormula;
+            } catch (e) {
+                console.error("Decoding error:", e);
+            }
+        }
+        
+        if (hzParam) {
+            document.getElementById('hz').value = hzParam;
+        }
+
+        if (mParam) {
+            document.getElementById('mode').value = mParam;
+        }
+    }
+
+    // ОБЯЗАТЕЛЬНО ВЫЗОВИ ЭТУ ФУНКЦИЮ ПРИ ЗАГРУЗКЕ
+    loadFromUrl();
+    // Логика окна настроек и динамической смены цветов
+    const settingsModal = document.getElementById('settingsModal');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const closeSettings = document.getElementById('closeSettings');
+    const colorAccentInput = document.getElementById('colorAccent');
+
+    // Открытие и закрытие модалки
+    settingsBtn.onclick = () => settingsModal.style.display = 'flex';
+    closeSettings.onclick = () => settingsModal.style.display = 'none';
+
+    // Функция для обновления CSS-переменных на лету
+    function updateThemeColor(variableName, colorValue) {
+        document.documentElement.style.setProperty(variableName, colorValue);
+    }
+
+    // Слушатель на инпут палитры
+    colorAccentInput.oninput = function() {
+        const chosenColor = this.value;
+        updateThemeColor('--accent', chosenColor);
+        
+        // Сохраняем выбранный цвет в память браузера
+        localStorage.setItem('savedAccentColor', chosenColor);
+        
+        // Динамически перерисовываем осциллограф под новый цвет
+        if (!isPlaying) draw(currentData); 
+    };
+
+    // Функция, которая проверяет память при загрузке страницы
+    function loadSavedTheme() {
+        const savedColor = localStorage.getItem('savedAccentColor');
+        if (savedColor) {
+            // Если цвет нашли в памяти, применяем его к CSS
+            updateThemeColor('--accent', savedColor);
+            // И красим саму пипетку в настройках в этот же цвет
+            colorAccentInput.value = savedColor;
+        }
+    }
+
+    // Запускаем проверку сохраненной темы сразу при загрузке кода
+    loadSavedTheme();
+    // Логика окна Bug Report через Formspree
+    const bugModal = document.getElementById('bugModal');
+    const bugBtn = document.getElementById('bugBtn');
+    const closeBugModal = document.getElementById('closeBugModal');
+
+    bugBtn.onclick = () => {
+        bugModal.style.display = 'flex';
+        // Автоматически подставляем текущую формулу из студии, чтобы пользователю не пришлось копировать её руками
+        document.getElementById('bugFormula').value = document.getElementById('formula').value;
+    };
+    closeBugModal.onclick = () => bugModal.style.display = 'none';
+    // Автоматический перевод времени апдейта в часовой пояс пользователя
+    function localizeUpdateInfo() {
+        const updateElem = document.getElementById('update-info');
+        if (updateElem) {
+            const utcString = updateElem.getAttribute('data-utc');
+            const date = new Date(utcString);
+            
+            // Опции для красивого вывода даты
+            const options = { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit', 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false 
+            };
+            
+            // Проверяем, вернул ли браузер дефолтное UTC (если смещение равно 0, а ты в Чехии)
+            // В Чехии сейчас летнее время, должно быть -120 минут (UTC+2)
+            let localTime;
+            if (date.getTimezoneOffset() === 0) {
+                // Искусственно добавляем 2 часа для Чехии (CEST), если Линукс локально сбросил зону в 0
+                const cescDate = new Date(date.getTime() + 2 * 60 * 60 * 1000);
+                localTime = cescDate.toLocaleString('ru-RU', options).replace(',', '');
+            } else {
+                // Если браузер работает нормально и видит систему
+                localTime = date.toLocaleString(navigator.language, options).replace(',', '');
+            }
+            
+            updateElem.innerText = `UPD: ${localTime} (Local Time)`;
+        }
+    }
+
+    // Запускаем локализацию времени
+    localizeUpdateInfo();
+    </script>
+</body>
+</html>

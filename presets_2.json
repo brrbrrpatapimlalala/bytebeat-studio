@@ -1,0 +1,8 @@
+[
+            {
+                "name": "the 42 melody",
+                "author": "Unknown",
+                "hz": 8000,
+                "formula": "t*(42&t>>10)"
+            }
+]
